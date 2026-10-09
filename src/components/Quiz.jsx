@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 
-function Quiz({ questions, onComplete }) {
+function Quiz({ questions, onAnswer, onComplete }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [score, setScore] = useState(0);
-  const [attempted, setAttempted] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [answerResult, setAnswerResult] = useState(null);
 
   const currentQuestion = questions[currentIndex];
   const finished = currentIndex >= questions.length;
@@ -15,24 +17,34 @@ function Quiz({ questions, onComplete }) {
     [currentIndex, finished, questions.length],
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selected === null) {
       return;
     }
 
-    const isCorrect = selected === currentQuestion.answer;
-    setShowFeedback(true);
-    setAttempted((value) => value + 1);
-
-    if (isCorrect) {
-      setScore((value) => value + 1);
+    setSubmitting(true);
+    setError('');
+    try {
+      const result = onAnswer
+        ? await onAnswer(currentQuestion, selected)
+        : {
+          correct: selected === currentQuestion.answer,
+          explanation: currentQuestion.explanation,
+        };
+      setAnswerResult(result);
+      if (result.correct) setScore((value) => value + 1);
+      setShowFeedback(true);
+    } catch (submissionError) {
+      setError(submissionError.message || 'Your answer could not be submitted.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleNext = () => {
+    setShowFeedback(true);
     if (currentIndex === questions.length - 1) {
-      const finalScore = score + (selected === currentQuestion.answer ? 1 : 0);
-      onComplete?.(finalScore, questions.length);
+      onComplete?.(score, questions.length);
       setCurrentIndex(questions.length);
       return;
     }
@@ -40,6 +52,8 @@ function Quiz({ questions, onComplete }) {
     setCurrentIndex((value) => value + 1);
     setSelected(null);
     setShowFeedback(false);
+    setAnswerResult(null);
+    setError('');
   };
 
   const reset = () => {
@@ -47,19 +61,19 @@ function Quiz({ questions, onComplete }) {
     setSelected(null);
     setShowFeedback(false);
     setScore(0);
-    setAttempted(0);
+    setAnswerResult(null);
+    setError('');
   };
 
   if (finished) {
-    const finalScore = score + (selected === currentQuestion.answer ? 1 : 0);
     return (
       <div className="panel p-5">
         <h3 className="text-2xl font-bold text-slate-900">Quiz complete</h3>
         <p className="mt-3 text-sm text-slate-600">
-          You scored <span className="font-bold text-cyan-700">{finalScore}</span> out of <span className="font-bold">{questions.length}</span>.
+          You scored <span className="font-bold text-cyan-700">{score}</span> out of <span className="font-bold">{questions.length}</span>.
         </p>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600" style={{ width: `${(finalScore / questions.length) * 100}%` }} />
+          <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-600" style={{ width: `${(score / questions.length) * 100}%` }} />
         </div>
         <button type="button" className="primary-button mt-5" onClick={reset}>
           Retry Quiz
@@ -104,16 +118,18 @@ function Quiz({ questions, onComplete }) {
       </div>
 
       {showFeedback ? (
-        <div className={`mt-5 rounded-2xl p-4 text-sm ${selected === currentQuestion.answer ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-          <p className="font-semibold">{selected === currentQuestion.answer ? 'Correct' : 'Incorrect'}</p>
-          <p className="mt-1 leading-6">{currentQuestion.explanation}</p>
+        <div className={`mt-5 rounded-2xl p-4 text-sm ${answerResult?.correct ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+          <p className="font-semibold">{answerResult?.correct ? 'Correct' : 'Incorrect'}</p>
+          <p className="mt-1 leading-6">{answerResult?.explanation}</p>
         </div>
       ) : null}
 
+      {error && <p role="alert" className="mt-4 text-sm text-rose-700">{error}</p>}
+
       <div className="mt-5 flex justify-end">
         {!showFeedback ? (
-          <button type="button" className="primary-button" onClick={handleSubmit} disabled={selected === null}>
-            Submit Answer
+          <button type="button" className="primary-button" onClick={handleSubmit} disabled={selected === null || submitting}>
+            {submitting ? 'Checking…' : 'Submit Answer'}
           </button>
         ) : (
           <button type="button" className="primary-button" onClick={handleNext}>

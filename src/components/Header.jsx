@@ -1,6 +1,6 @@
-import { Menu } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 
-function Header({ title, onMenuClick }) {
+function Header({ title, onMenuClick, user, onLogout }) {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-sm">
       <div className="flex items-center justify-between px-4 py-4 md:px-6 lg:px-8">
@@ -19,8 +19,15 @@ function Header({ title, onMenuClick }) {
           </div>
         </div>
 
-        <div className="hidden items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700 md:inline-flex">
-          Preview Frontend
+        <div className="flex items-center gap-3">
+          <div className="hidden text-right sm:block">
+            <p className="text-sm font-semibold text-slate-800">{user.name}</p>
+            <p className="text-xs capitalize text-slate-500">{user.role}</p>
+          </div>
+          <button type="button" className="ghost-button px-3 py-2 text-xs" onClick={onLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign out
+          </button>
         </div>
       </div>
     </header>

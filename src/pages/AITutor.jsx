@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { Lightbulb } from 'lucide-react';
 import TutorChat from '../components/TutorChat';
-import { getTutorResponse } from '../services/tutorService';
+import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/authService';
+
+function topicForQuestion(question) {
+  const value = question.toLowerCase();
+  if (value.includes('entangle') || value.includes('bell state')) return 'Entanglement';
+  if (value.includes('superposition') || value.includes('hadamard')) return 'Superposition';
+  if (value.includes('gate') || value.includes('cnot')) return 'Quantum Gates';
+  if (value.includes('qubit')) return 'Qubits';
+  return 'Other';
+}
 
 const suggestedQuestions = [
   'What is a qubit?',
@@ -12,51 +22,93 @@ const suggestedQuestions = [
 ];
 
 function AITutor() {
+  const { token, logout } = useAuth();
   const [messages, setMessages] = useState([
     {
       id: crypto.randomUUID(),
       sender: 'bot',
-      text: 'Hello! I am a frontend learning assistant for QuantumLearn AI. Ask me a beginner question about qubits, gates, or quantum ideas.',
+      text: 'Hello! I am your Gemini-powered quantum computing tutor. Ask me about qubits, gates, or quantum ideas. Please do not share personal information.',
     },
   ]);
   const [input, setInput] = useState('');
+  const [activityMessage, setActivityMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
-  const handleSend = () => {
-    const trimmed = input.trim();
-    if (!trimmed) {
+  const recordTutorInteraction = async (question) => {
+    try {
+      await authService.recordActivity(token, {
+        event_type: 'tutor_interaction',
+        topic: topicForQuestion(question),
+      });
+      setActivityMessage('');
+    } catch (error) {
+      if (error.status === 401) {
+        logout();
+        return;
+      }
+      setActivityMessage(`Tutor activity could not be recorded: ${error.message}`);
+    }
+  };
+
+  const sendQuestion = async (question) => {
+    const trimmed = question.trim();
+    if (!trimmed || isSending) {
       return;
     }
 
+    setIsSending(true);
+    setActivityMessage('');
     const nextUserMessage = {
       id: crypto.randomUUID(),
       sender: 'user',
       text: trimmed,
     };
 
-    const response = {
-      id: crypto.randomUUID(),
-      sender: 'bot',
-      text: getTutorResponse(trimmed),
-    };
-
-    setMessages((current) => [...current, nextUserMessage, response]);
-    setInput('');
+    try {
+      const { response: responseText } = await authService.tutorChat(
+        token,
+        trimmed,
+        topicForQuestion(trimmed),
+      );
+      const response = {
+        id: crypto.randomUUID(),
+        sender: 'bot',
+        text: responseText,
+        topic: topicForQuestion(trimmed),
+      };
+      setMessages((current) => [...current, nextUserMessage, response]);
+      if (question === input) {
+        setInput('');
+      }
+      await recordTutorInteraction(trimmed);
+    } catch (error) {
+      if (error.status === 401) {
+        logout();
+      }
+      setActivityMessage(error.message || 'The AI tutor could not answer. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const handleSuggestedQuestion = (question) => {
-    const nextUserMessage = {
-      id: crypto.randomUUID(),
-      sender: 'user',
-      text: question,
-    };
+  const handleSend = () => sendQuestion(input);
 
-    const response = {
-      id: crypto.randomUUID(),
-      sender: 'bot',
-      text: getTutorResponse(question),
-    };
-
-    setMessages((current) => [...current, nextUserMessage, response]);
+  const handleReport = async (message) => {
+    try {
+      await authService.recordActivity(token, {
+        event_type: 'tutor_report',
+        topic: message.topic,
+        issue: 'Student reported a potentially incorrect tutor explanation.',
+        explanation: message.text,
+      });
+      setActivityMessage('Report submitted for administrator review. The conversation was not saved.');
+    } catch (error) {
+      if (error.status === 401) {
+        logout();
+        return;
+      }
+      setActivityMessage(`Report could not be submitted: ${error.message}`);
+    }
   };
 
   const handleClear = () => {
@@ -77,7 +129,7 @@ function AITutor() {
             <Lightbulb className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">Tutoring demo</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">Gemini-powered tutor</p>
             <h2 className="text-2xl font-bold text-slate-900">Ask me about quantum concepts</h2>
           </div>
         </div>
@@ -88,7 +140,8 @@ function AITutor() {
               key={question}
               type="button"
               className="secondary-button px-3 py-2 text-xs"
-              onClick={() => handleSuggestedQuestion(question)}
+              onClick={() => sendQuestion(question)}
+              disabled={isSending}
             >
               {question}
             </button>
@@ -96,7 +149,10 @@ function AITutor() {
         </div>
       </div>
 
-      <TutorChat messages={messages} input={input} setInput={setInput} onSend={handleSend} onClear={handleClear} />
+      {activityMessage && (
+        <p role="status" className="rounded-xl bg-cyan-50 p-3 text-sm text-cyan-900">{activityMessage}</p>
+      )}
+      <TutorChat messages={messages} input={input} setInput={setInput} onSend={handleSend} onClear={handleClear} onReport={handleReport} isSending={isSending} />
     </div>
   );
 }

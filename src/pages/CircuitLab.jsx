@@ -5,15 +5,15 @@ import GateSelector from '../components/GateSelector';
 import ResultsPanel from '../components/ResultsPanel';
 import { createGate, normalizeCircuit } from '../utils/circuitUtils';
 import { explainCircuit, runSimulation } from '../services/simulationService';
+import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/authService';
 
 function CircuitLab() {
+  const { token, logout } = useAuth();
   const [qubits, setQubits] = useState(2);
-  const [shots, setShots] = useState(100);
+  const [shots, setShots] = useState(1000);
   const [selectedGate, setSelectedGate] = useState('H');
-  const [gates, setGates] = useState([
-    createGate({ gateType: 'H', target: 0, position: 0 }),
-    createGate({ gateType: 'CNOT', control: 0, target: 1, position: 1 }),
-  ]);
+  const [gates, setGates] = useState([]);
   const [targetQubit, setTargetQubit] = useState(0);
   const [controlQubit, setControlQubit] = useState(0);
   const [error, setError] = useState('');
@@ -23,6 +23,9 @@ function CircuitLab() {
 
   useEffect(() => {
     setGates((current) => normalizeCircuit(current, qubits));
+    setTargetQubit((current) => Math.min(current, qubits - 1));
+    setControlQubit((current) => Math.min(current, qubits - 1));
+    setSimulation(null);
   }, [qubits]);
 
   const canAddGate = useMemo(() => {
@@ -39,6 +42,7 @@ function CircuitLab() {
     }
 
     setError('');
+    setSimulation(null);
     const nextGate = createGate({
       gateType: selectedGate,
       target: Number(targetQubit),
@@ -52,6 +56,7 @@ function CircuitLab() {
   const handleRemoveGate = () => {
     setGates((current) => current.slice(0, -1));
     setError('');
+    setSimulation(null);
   };
 
   const handleReset = () => {
@@ -65,11 +70,48 @@ function CircuitLab() {
     setLoading(true);
     setError('');
     try {
-      const next = await runSimulation({ gates, qubits, shots });
+      const next = await runSimulation({ gates, qubits, shots, token });
       setSimulation(next);
-      setExplanation(explainCircuit({ gates, qubits }));
-    } catch {
-      setError('The preview simulation could not run. Please check the circuit and try again.');
+      setExplanation(next.explanation);
+      try {
+        await authService.recordActivity(token, {
+          event_type: 'circuit_simulation',
+          gates: gates.map((gate) => gate.gateType),
+          qubits,
+          success: true,
+        });
+      } catch (activityError) {
+        if (activityError.status === 401) {
+          logout();
+          return;
+        }
+        setError(`Simulation succeeded, but activity could not be recorded: ${activityError.message}`);
+      }
+    } catch (simulationError) {
+      if (simulationError.status === 401) {
+        logout();
+        return;
+      }
+      setSimulation(null);
+      setError(
+        simulationError.status
+          ? simulationError.message
+          : 'Simulation unavailable: make sure the Flask backend is running at http://127.0.0.1:5000.',
+      );
+      try {
+        await authService.recordActivity(token, {
+          event_type: 'circuit_simulation',
+          gates: gates.map((gate) => gate.gateType),
+          qubits,
+          success: false,
+        });
+      } catch (activityError) {
+        if (activityError.status === 401) {
+          logout();
+          return;
+        }
+        setError(`Simulation failed and its activity could not be recorded: ${activityError.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -84,8 +126,6 @@ function CircuitLab() {
       <div className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
         <GateSelector
           selectedGate={selectedGate}
-          onSelect={setSelectedGate}
-          gateType={selectedGate}
           setGateType={setSelectedGate}
           onAdd={handleAddGate}
           onRemove={handleRemoveGate}
@@ -163,7 +203,7 @@ function CircuitLab() {
             </div>
             <button type="button" className="primary-button w-full gap-2" onClick={handleSimulate}>
               <PlayCircle className="h-4 w-4" />
-              Simulate Circuit
+              {loading ? 'Simulating…' : 'Run Simulation'}
             </button>
           </div>
         </div>

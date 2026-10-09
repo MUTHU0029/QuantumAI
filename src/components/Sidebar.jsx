@@ -9,7 +9,13 @@ const navItems = [
   { to: '/progress', label: 'My Progress', icon: Sparkles },
 ];
 
-function Sidebar({ open, onClose }) {
+const adminNavItems = [
+  { to: '/admin', label: 'Admin dashboard', icon: BarChart3 },
+];
+
+function Sidebar({ open, onClose, role }) {
+  const items = role === 'admin' ? adminNavItems : navItems;
+
   return (
     <>
       <div
@@ -32,7 +38,7 @@ function Sidebar({ open, onClose }) {
           </div>
 
           <nav className="space-y-2">
-            {navItems.map(({ to, label, icon: Icon }) => (
+            {items.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -51,11 +57,13 @@ function Sidebar({ open, onClose }) {
             ))}
           </nav>
 
-          <div className="mt-auto rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">Course focus</p>
-            <p className="mt-2 text-lg font-bold text-white">Qubit Foundations</p>
-            <p className="mt-2 text-sm text-cyan-50/80">Sample learning content for beginner quantum computing.</p>
-          </div>
+          {role === 'student' && (
+            <div className="mt-auto rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">Course focus</p>
+              <p className="mt-2 text-lg font-bold text-white">Qubit Foundations</p>
+              <p className="mt-2 text-sm text-cyan-50/80">Sample learning content for beginner quantum computing.</p>
+            </div>
+          )}
         </div>
       </aside>
     </>

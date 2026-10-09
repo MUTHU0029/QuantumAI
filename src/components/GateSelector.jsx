@@ -1,14 +1,14 @@
 import { Sparkles } from 'lucide-react';
 import { gateMeta } from '../utils/circuitUtils';
 
-function GateSelector({ selectedGate, onSelect, gateType, setGateType, onAdd, onRemove, onReset, qubits, setQubits, shots, setShots, canAdd }) {
+function GateSelector({ selectedGate, setGateType, onAdd, onRemove, onReset, qubits, setQubits, shots, setShots, canAdd }) {
   return (
     <div className="panel p-4 md:p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-bold text-slate-900">Circuit controls</h3>
         <div className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700">
           <Sparkles className="h-3.5 w-3.5" />
-          Frontend preview
+          Local Qiskit simulator
         </div>
       </div>
 
@@ -33,7 +33,7 @@ function GateSelector({ selectedGate, onSelect, gateType, setGateType, onAdd, on
             onChange={(event) => setShots(Number(event.target.value))}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-200"
           >
-            {[100, 500, 1000].map((value) => (
+            {[100, 500, 1000, 5000].map((value) => (
               <option key={value} value={value}>{value}</option>
             ))}
           </select>
@@ -49,7 +49,7 @@ function GateSelector({ selectedGate, onSelect, gateType, setGateType, onAdd, on
               type="button"
               onClick={() => setGateType(key)}
               className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                gateType === key
+                selectedGate === key
                   ? 'border-cyan-500 bg-cyan-50 text-cyan-700'
                   : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-200 hover:bg-cyan-50'
               }`}
